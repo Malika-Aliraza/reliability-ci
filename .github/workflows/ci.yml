@@ -1,4 +1,4 @@
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -7,9 +7,9 @@ on:
     branches: [ main ]
 
 jobs:
+  # ---------- Stage 1: CI (from experiment 3.2.1) ----------
   build-and-test:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -24,7 +24,7 @@ jobs:
       - name: Make mvnw executable
         run: chmod +x mvnw
 
-      - name: Build and run all tests (unit, API, contract, integration)
+      - name: Build and run all tests
         run: ./mvnw -B clean verify
 
       - name: Upload test reports
@@ -35,3 +35,106 @@ jobs:
           path: |
             target/surefire-reports/
             target/pacts/
+
+  # ---------- Stage 2: build image, push as "canary" ----------
+  build-and-push-image:
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set image name (lowercase)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:canary
+
+  # ---------- Stage 3: canary gate (smoke test) ----------
+  canary-check:
+    needs: build-and-push-image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Set image name (lowercase)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Start canary container
+        run: |
+          docker run -d --name canary -p 8080:8080 \
+            -e APP_VERSION=canary \
+            -e SPRING_KAFKA_LISTENER_AUTO_STARTUP=false \
+            -e SPRING_KAFKA_ADMIN_AUTO_CREATE=false \
+            $IMAGE:canary
+
+      - name: Smoke test the canary
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:8080/version; then
+              echo ""
+              echo "Canary is healthy"
+              exit 0
+            fi
+            echo "Waiting for canary... ($i)"
+            sleep 3
+          done
+          echo "Canary failed health check"
+          docker logs canary
+          exit 1
+
+  # ---------- Stage 4: promote canary to stable ----------
+  promote-to-stable:
+    needs: canary-check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Set image name (lowercase)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote canary image to stable and latest
+        run: |
+          docker buildx imagetools create \
+            --tag $IMAGE:stable \
+            --tag $IMAGE:latest \
+            $IMAGE:canary
