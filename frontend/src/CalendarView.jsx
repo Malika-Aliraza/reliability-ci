@@ -1,13 +1,16 @@
 import { useState } from 'react'
+import { useSelector } from 'react-redux'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const keyOf = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 
-export default function CalendarView({ posts }) {
+export default function CalendarView() {
+  const posts = useSelector((s) => s.posts.items)
   const [cursor, setCursor] = useState(() => {
     const d = new Date()
     return new Date(d.getFullYear(), d.getMonth(), 1)
   })
+  
   const year = cursor.getFullYear()
   const month = cursor.getMonth()
   const offset = new Date(year, month, 1).getDay()

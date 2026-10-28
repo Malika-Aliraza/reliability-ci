@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { api } from './api'
+import { useEffect } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
+import { fetchAnalytics } from './store/analyticsSlice'
 
 function Bars({ data, color }) {
   const max = Math.max(1, ...Object.values(data))
@@ -18,13 +19,15 @@ function Bars({ data, color }) {
   )
 }
 
-export default function Analytics({ posts }) {
-  const [data, setData] = useState(null)
-  const [error, setError] = useState('')
+export default function Analytics() {
+  const dispatch = useDispatch()
+  const wid = useSelector((s) => s.workspace.activeId)
+  const posts = useSelector((s) => s.posts.items)
+  const { data, error } = useSelector((s) => s.analytics)
 
   useEffect(() => {
-    api.analytics().then((d) => { setData(d); setError('') }).catch((e) => setError(e.message))
-  }, [posts])
+    if (wid) dispatch(fetchAnalytics(wid))
+  }, [wid, posts, dispatch])
 
   if (error) return <div className="alert err">{error}</div>
   if (!data) return <p className="muted">Loading analytics...</p>

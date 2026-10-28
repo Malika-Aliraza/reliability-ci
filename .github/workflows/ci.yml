@@ -35,6 +35,7 @@ jobs:
           path: |
             target/surefire-reports/
             target/pacts/
+            target/site/jacoco/
 
   # ---------- Frontend CI (runs in parallel) ----------
   frontend-build:

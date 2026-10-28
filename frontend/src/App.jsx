@@ -1,59 +1,63 @@
-import { useCallback, useEffect, useState } from 'react'
-import { api, clearToken, getToken } from './api'
+import { useEffect, useState } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 import Login from './Login'
 import Composer from './Composer'
 import CalendarView from './CalendarView'
 import Analytics from './Analytics'
+import Members from './Members'
+import { logout } from './store/authSlice'
+import { fetchWorkspaces, selectRole, setActive } from './store/workspaceSlice'
+import { fetchPosts } from './store/postsSlice'
+
+const TABS = ['compose', 'calendar', 'analytics', 'team']
 
 export default function App() {
-  const [email, setEmail] = useState(getToken() ? localStorage.getItem('email') : null)
+  const dispatch = useDispatch()
+  const email = useSelector((s) => s.auth.email)
+  const { list, activeId } = useSelector((s) => s.workspace)
+  const role = useSelector(selectRole)
+  const error = useSelector((s) => s.posts.error)
   const [tab, setTab] = useState('compose')
-  const [posts, setPosts] = useState([])
-  const [error, setError] = useState('')
-
-  const logout = useCallback(() => {
-    clearToken()
-    localStorage.removeItem('email')
-    setEmail(null)
-    setPosts([])
-  }, [])
-
-  const refresh = useCallback(async () => {
-    try {
-      setPosts(await api.listPosts())
-      setError('')
-    } catch (e) {
-      setError(e.message)
-    }
-  }, [])
 
   useEffect(() => {
-    window.addEventListener('auth-expired', logout)
-    return () => window.removeEventListener('auth-expired', logout)
-  }, [logout])
+    const onExpired = () => dispatch(logout())
+    window.addEventListener('auth-expired', onExpired)
+    return () => window.removeEventListener('auth-expired', onExpired)
+  }, [dispatch])
 
-  // load posts, then poll so status changes (QUEUED -> PUBLISHED) show up live
   useEffect(() => {
-    if (!email) return
-    refresh()
-    const id = setInterval(refresh, 5000)
+    if (email) dispatch(fetchWorkspaces())
+  }, [email, dispatch])
+
+  // poll so asynchronous changes (publishing, role changes by an admin) appear live
+  useEffect(() => {
+    if (!activeId) return
+    dispatch(fetchPosts(activeId))
+    const id = setInterval(() => {
+      dispatch(fetchPosts(activeId))
+      dispatch(fetchWorkspaces())
+    }, 5000)
     return () => clearInterval(id)
-  }, [email, refresh])
+  }, [activeId, dispatch])
 
-  if (!email) return <Login onLogin={setEmail} />
+  if (!email) return <Login />
 
   return (
     <div className="app">
       <header className="topbar">
         <h1>Post Scheduler</h1>
-        <div>
+        <div className="topbar-right">
+          <select value={activeId ?? ''} onChange={(e) => dispatch(setActive(Number(e.target.value)))}>
+            {list.map((w) => <option key={w.id} value={w.id}>{w.name} ({w.role})</option>)}
+          </select>
+          {role && <span className={`role ${role}`}>{role}</span>}
           <span className="muted">{email}</span>
-          <button className="btn-link" onClick={logout}>Log out</button>
+          <button className="btn-link" onClick={() => dispatch(logout())}>Log out</button>
         </div>
       </header>
 
       <nav className="tabs">
-        {['compose', 'calendar', 'analytics'].map((t) => (
+        {TABS.map((t) => (
           <button key={t} className={tab === t ? 'tab active' : 'tab'} onClick={() => setTab(t)}>
             {t[0].toUpperCase() + t.slice(1)}
           </button>
@@ -62,9 +66,10 @@ export default function App() {
 
       {error && <div className="alert err">{error}</div>}
 
-      {tab === 'compose' && <Composer posts={posts} onChange={refresh} />}
-      {tab === 'calendar' && <CalendarView posts={posts} />}
-      {tab === 'analytics' && <Analytics posts={posts} />}
+      {tab === 'compose' && <Composer />}
+      {tab === 'calendar' && <CalendarView />}
+      {tab === 'analytics' && <Analytics />}
+      {tab === 'team' && <Members />}
     </div>
   )
 }

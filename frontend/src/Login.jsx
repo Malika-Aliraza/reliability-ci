@@ -1,27 +1,17 @@
 import { useState } from 'react'
-import { api, setToken } from './api'
+import { useDispatch, useSelector } from 'react-redux'
+import { authenticate } from './store/authSlice'
 
-export default function Login({ onLogin }) {
+export default function Login() {
+  const dispatch = useDispatch()
+  const { loading, error } = useSelector((s) => s.auth)
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
 
-  async function submit(e) {
+  function submit(e) {
     e.preventDefault()
-    setBusy(true)
-    setError('')
-    try {
-      const res = mode === 'login' ? await api.login(email, password) : await api.register(email, password)
-      setToken(res.token)
-      localStorage.setItem('email', res.email)
-      onLogin(res.email)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setBusy(false)
-    }
+    dispatch(authenticate({ mode, email, password }))
   }
 
   return (
@@ -34,12 +24,11 @@ export default function Login({ onLogin }) {
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
         <label>Password</label>
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        <button className="btn" disabled={busy}>
-          {busy ? 'Please wait...' : mode === 'login' ? 'Log in' : 'Register'}
+        <button className="btn" disabled={loading}>
+          {loading ? 'Please wait...' : mode === 'login' ? 'Log in' : 'Register'}
         </button>
-        <button type="button" className="btn-link"
-          onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError('') }}>
-          {mode === 'login' ? "No account? Register" : 'Have an account? Log in'}
+        <button type="button" className="btn-link" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+          {mode === 'login' ? 'No account? Register' : 'Have an account? Log in'}
         </button>
       </form>
     </div>

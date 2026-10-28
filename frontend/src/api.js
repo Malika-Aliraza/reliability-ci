@@ -4,6 +4,7 @@ const TOKEN_KEY = 'token'
 export const getToken = () => localStorage.getItem(TOKEN_KEY)
 export const setToken = (t) => localStorage.setItem(TOKEN_KEY, t)
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY)
+export const errorMessage = (e) => (typeof e === 'string' ? e : e?.message || 'Something went wrong')
 
 export class ApiError extends Error {
   constructor(status, message) {
@@ -38,12 +39,24 @@ async function request(path, options = {}) {
   return data
 }
 
+const ws = (wid) => `/workspaces/${wid}`
+const send = (method, body) => ({ method, body: JSON.stringify(body) })
+
 export const api = {
-  register: (email, password) => request('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  login: (email, password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  listPosts: () => request('/posts'),
-  createPost: (post) => request('/posts', { method: 'POST', body: JSON.stringify(post) }),
-  schedulePost: (id, scheduledAt) => request(`/posts/${id}/schedule`, { method: 'PUT', body: JSON.stringify({ scheduledAt }) }),
-  deletePost: (id) => request(`/posts/${id}`, { method: 'DELETE' }),
-  analytics: () => request('/analytics'),
+  register: (email, password) => request('/auth/register', send('POST', { email, password })),
+  login: (email, password) => request('/auth/login', send('POST', { email, password })),
+
+  listWorkspaces: () => request('/workspaces'),
+  createWorkspace: (name) => request('/workspaces', send('POST', { name })),
+  listMembers: (wid) => request(`${ws(wid)}/members`),
+  addMember: (wid, email, role) => request(`${ws(wid)}/members`, send('POST', { email, role })),
+  changeRole: (wid, userId, role) => request(`${ws(wid)}/members/${userId}`, send('PUT', { role })),
+  removeMember: (wid, userId) => request(`${ws(wid)}/members/${userId}`, { method: 'DELETE' }),
+
+  listPosts: (wid) => request(`${ws(wid)}/posts`),
+  createPost: (wid, post) => request(`${ws(wid)}/posts`, send('POST', post)),
+  schedulePost: (wid, id, scheduledAt) => request(`${ws(wid)}/posts/${id}/schedule`, send('PUT', { scheduledAt })),
+  deletePost: (wid, id) => request(`${ws(wid)}/posts/${id}`, { method: 'DELETE' }),
+
+  analytics: (wid) => request(`${ws(wid)}/analytics`),
 }
