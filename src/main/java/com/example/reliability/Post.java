@@ -9,7 +9,9 @@ public class Post {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private Long userId;
+    private Long workspaceId;
+    private Long authorId;
+    private String authorEmail;
     @Column(length = 500)
     private String content;
     private String platform;
@@ -23,12 +25,18 @@ public class Post {
     private int shares;
 
     public Post() {}
-    public Post(Long userId, String content, String platform) {
-        this.userId = userId; this.content = content; this.platform = platform;
+    public Post(Long workspaceId, Long authorId, String authorEmail, String content, String platform) {
+        this.workspaceId = workspaceId;
+        this.authorId = authorId;
+        this.authorEmail = authorEmail;
+        this.content = content;
+        this.platform = platform;
     }
 
     public Long getId() { return id; }
-    public Long getUserId() { return userId; }
+    public Long getWorkspaceId() { return workspaceId; }
+    public Long getAuthorId() { return authorId; }
+    public String getAuthorEmail() { return authorEmail; }
     public String getContent() { return content; }
     public String getPlatform() { return platform; }
     public PostStatus getStatus() { return status; }

@@ -21,13 +21,15 @@ public class PostPublisher {
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    @Scheduled(fixedDelay = 10000)
+    @Scheduled(fixedDelayString = "${app.scheduler.delay-ms:10000}",
+               initialDelayString = "${app.scheduler.initial-delay-ms:0}")
     public void publishDuePosts() {
         for (Post post : repo.findByStatusAndScheduledAtLessThanEqual(PostStatus.SCHEDULED, Instant.now())) {
-            post.setStatus(PostStatus.QUEUED);
-            repo.save(post);
-            kafkaTemplate.send(PostTopicConfig.POSTS_TOPIC, String.valueOf(post.getId()), post.getContent());
-            log.info("Post {} is due -> queued to Kafka", post.getId());
+            // only the instance that wins the atomic claim sends the event (safe with many replicas)
+            if (repo.claim(post.getId(), PostStatus.SCHEDULED, PostStatus.QUEUED) == 1) {
+                kafkaTemplate.send(PostTopicConfig.POSTS_TOPIC, String.valueOf(post.getId()), post.getContent());
+                log.info("Post {} is due -> queued to Kafka", post.getId());
+            }
         }
     }
 }

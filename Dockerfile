@@ -13,3 +13,11 @@ WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+RUN useradd --system --uid 1001 appuser
+USER appuser
+COPY --from=build /app/target/*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

@@ -2,6 +2,7 @@ package com.example.reliability;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -16,14 +17,17 @@ public class AnalyticsController {
                             long impressions, long likes, long shares, double engagementRate) {}
 
     private final PostRepository repo;
+    private final WorkspaceAccess access;
 
-    public AnalyticsController(PostRepository repo) {
+    public AnalyticsController(PostRepository repo, WorkspaceAccess access) {
         this.repo = repo;
+        this.access = access;
     }
 
-    @GetMapping("/api/analytics")
-    public Analytics analytics(Authentication auth) {
-        List<Post> posts = repo.findByUserId((Long) auth.getPrincipal());
+    @GetMapping("/api/workspaces/{wid}/analytics")
+    public Analytics analytics(@PathVariable Long wid, Authentication auth) {
+        access.require(wid, auth, Role.VIEWER);
+        List<Post> posts = repo.findByWorkspaceId(wid);
         long impressions = posts.stream().mapToLong(Post::getImpressions).sum();
         long likes = posts.stream().mapToLong(Post::getLikes).sum();
         long shares = posts.stream().mapToLong(Post::getShares).sum();

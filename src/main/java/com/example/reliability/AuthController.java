@@ -14,11 +14,16 @@ public class AuthController {
     public record AuthResponse(String token, String email) {}
 
     private final UserRepository users;
+    private final WorkspaceRepository workspaces;
+    private final MembershipRepository memberships;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
 
-    public AuthController(UserRepository users, PasswordEncoder encoder, JwtService jwt) {
+    public AuthController(UserRepository users, WorkspaceRepository workspaces,
+                          MembershipRepository memberships, PasswordEncoder encoder, JwtService jwt) {
         this.users = users;
+        this.workspaces = workspaces;
+        this.memberships = memberships;
         this.encoder = encoder;
         this.jwt = jwt;
     }
@@ -36,6 +41,11 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "An account with this email already exists");
         }
         AppUser user = users.save(new AppUser(email, encoder.encode(req.password())));
+
+        // every new user gets a personal workspace and is its admin
+        Workspace workspace = workspaces.save(new Workspace(email.substring(0, email.indexOf('@')) + "'s workspace"));
+        memberships.save(new Membership(workspace.getId(), user.getId(), Role.ADMIN));
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new AuthResponse(jwt.generateToken(user.getId(), user.getEmail()), user.getEmail()));
     }
